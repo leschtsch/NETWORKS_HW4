@@ -173,10 +173,10 @@ protected:
     bool matches = StartsWithCaseIgnorant(sdata, method_);
 
     if (matches) {
-      std::cout << "packet matched RESPONSE rule\n";
+      std::cout << "packet matched REQUEST_METHOD rule\n";
       return action;
     } else {
-      std::cout << "packet didn't match RESPONSE rule\n";
+      std::cout << "packet didn't match REQUEST_METHOD rule\n";
       return RuleAction::None;
     }
   }
@@ -187,13 +187,28 @@ private:
 
 class ResponseCodeRule : public Rule {
 public:
+  ResponseCodeRule(auto code) : code_(code) {}
+
   virtual ~ResponseCodeRule() = default;
 
 protected:
-  virtual RuleAction DoMatches(char * /*data*/, int /*len*/) override {
-    std::cout << "packet matched STUB rule\n";
-    return action;
+  virtual RuleAction DoMatches(char *data, int len) override {
+    std::size_t slen = len;
+    auto sdata = std::string(data, slen);
+
+    bool matches = StartsWithCaseIgnorant(sdata, "HTTP "+code_);
+
+    if (matches) {
+      std::cout << "packet matched RESPONSE_CODE rule\n";
+      return action;
+    } else {
+      std::cout << "packet didn't match RESPONSE_CODE rule\n";
+      return RuleAction::None;
+    }
   }
+
+private:
+  std::string code_;
 };
 
 std::vector<std::unique_ptr<Rule>> g_rules;
@@ -205,8 +220,18 @@ ReadRequestMethodRule(const std::string_view &line) {
   return std::make_unique<RequestMethodRule>(method.data());
 }
 
+std::unique_ptr<ResponseCodeRule>
+ReadResponseCodeRule(const std::string_view &line) {
+  auto code = GetWord(line);
+  std::cout << "added RESPONSE_CODE " << code << " rule\n";
+  return std::make_unique<ResponseCodeRule>(code.data());
+}
+
 void ReadOneRule(std::string_view line) {
   line = SkipWs(line);
+  if (line.size() == 0) {
+    return;
+  }
 
   RuleAction action = RuleAction::None;
 
@@ -236,6 +261,9 @@ void ReadOneRule(std::string_view line) {
   } else if (EqualCaseIgnorant(rule_name, "REQUEST_METHOD")) {
     line = SkipWord(line);
     rule = ReadRequestMethodRule(line);
+  } else if (EqualCaseIgnorant(rule_name, "RESPONSE_CODE")) {
+    line = SkipWord(line);
+    rule = ReadResponseCodeRule(line);
   }
 
   if (!rule) {
